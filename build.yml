@@ -1,0 +1,43 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project if it was uploaded as a zip
+        run: |
+          z=$(ls *.zip 2>/dev/null | head -n1 || true)
+          if [ -n "$z" ] && [ ! -f settings.gradle.kts ]; then unzip -q "$z" -d proj; fi
+
+      - name: Find project folder
+        id: p
+        run: |
+          f=$(find . -name settings.gradle.kts -not -path './.git/*' | head -n1)
+          echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Accept Android licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build debug APK
+        working-directory: ${{ steps.p.outputs.dir }}
+        run: gradle assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CafeYar-APK
+          path: ${{ steps.p.outputs.dir }}/app/build/outputs/apk/debug/*.apk
